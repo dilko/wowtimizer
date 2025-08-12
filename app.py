@@ -438,8 +438,8 @@ best_cols = ["slot","Name"] + [c for c in ALL_STATS if c in chosen_df.columns]
 if "Cost_num" in chosen_df.columns: best_cols += ["Cost_num"]
 if "Score" in chosen_df.columns:   best_cols += ["Score"]
 
-st.subheader("🇧🇮🇸 List")
-st.caption("For true min-maxers with deep pockets")
+st.subheader("🏆🇧🇮🇸 List")
+st.markdown("###### For true min-maxers with deep pockets.")
 st.dataframe(
     chosen_df[best_cols],
     use_container_width=True,
@@ -466,7 +466,7 @@ if "Cost_num" in budget_df.columns: bcols += ["Cost_num"]
 if "Score" in budget_df.columns:    bcols += ["Score"]
 
 st.subheader(f"💸 Budget set (≤ {max_loss*100:.1f}% score loss)")
-st.caption("For petty penny-pinchers")
+st.markdown("###### For petty penny-pinchers")
 st.dataframe(
     budget_df[bcols],
     use_container_width=True,
@@ -484,6 +484,7 @@ score_drop_pct = 100.0 * max(meta["score"] - budget_meta["score"], 0) / meta["sc
 cost_saved_pct = 100.0 * max(gold_saved, 0) / meta["price"] if meta["price"] > 0 else 0.0
 
 st.subheader("↔️ Comparison")
+st.markdown("###### Know what you're trading off")
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Optimal price", f"{meta['price']:.0f}g")
 c2.metric("Budget price", f"{budget_meta['price']:.0f}g", f"-{cost_saved_pct:.2f}%")
@@ -496,5 +497,6 @@ st.write(
 )
 
 st.download_button("Download budget set CSV", data=df_to_csv_bytes(budget_df[bcols]), file_name="budget_item_set.csv")
+
 
 
