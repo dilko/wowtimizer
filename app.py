@@ -1,5 +1,6 @@
 import io
 import json
+import base64
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -50,14 +51,12 @@ def inject_wow_theme(primary="#C79C6E"):
         --wow-panel-strong: rgba(20,16,12,0.85);
       }}
 
-      /* App background + base text */
       .stApp {{
         background: radial-gradient(1200px 600px at 20% -10%, #242018 0%, #0e0b08 55%, #080705 100%);
         color: var(--wow-ink);
         font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
       }}
 
-      /* Headings */
       h1, h2, h3 {{
         font-family: 'Cinzel', serif !important;
         color: var(--wow-primary) !important;
@@ -65,7 +64,6 @@ def inject_wow_theme(primary="#C79C6E"):
         letter-spacing: .3px;
       }}
 
-      /* Parchment-ish panels (expanders, dataframes) */
       div[data-testid="stExpander"] > details {{
         border: 1px solid var(--wow-gold);
         border-radius: 12px;
@@ -81,7 +79,6 @@ def inject_wow_theme(primary="#C79C6E"):
         padding: 4px;
       }}
 
-      /* Buttons & downloads */
       .stButton>button, .stDownloadButton>button {{
         background: linear-gradient(180deg, var(--wow-primary), #3b2f1f);
         color: #fff;
@@ -90,7 +87,6 @@ def inject_wow_theme(primary="#C79C6E"):
         box-shadow: 0 0 0 1px rgba(0,0,0,.5) inset, 0 1px 4px rgba(0,0,0,.4);
       }}
 
-      /* KPI metrics */
       div[data-testid="stMetric"] {{
         background: var(--wow-panel);
         border: 1px solid var(--wow-gold);
@@ -119,6 +115,47 @@ def wow_banner(title="WoWtimizer", subtitle="Min-max your loot. Save your gold."
         unsafe_allow_html=True
     )
 
+def wow_hero(image_bytes: bytes = None, image_url: str = None, height: int = 280,
+             title="Dilan's WoW Item Optimizer", subtitle="Pick smarter. Spend wiser."):
+    """
+    Renders a hero banner with an optional background image (upload or URL).
+    If both provided, the uploaded image takes precedence.
+    """
+    url = None
+    if image_bytes:
+        b64 = base64.b64encode(image_bytes).decode()
+        url = f"data:image/png;base64,{b64}"
+    elif image_url:
+        url = image_url
+
+    if url:
+        bg = f"background-image: linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,.55)), url('{url}'); background-size: cover; background-position: center;"
+    else:
+        bg = "background: linear-gradient(180deg, rgba(255,215,128,0.08), rgba(0,0,0,0));"
+
+    st.markdown(
+        f"""
+        <div style="
+          border:1px solid var(--wow-gold);
+          border-radius:14px;
+          height:{height}px;
+          padding:16px 18px;
+          margin:8px 0 18px 0;
+          display:flex;
+          align-items:flex-end;
+          {bg}
+        ">
+          <div>
+            <div style="font-family:'Cinzel',serif;font-size:34px;color:var(--wow-primary);line-height:1.1;">
+              {title}
+            </div>
+            <div style="color:var(--wow-ink);opacity:.95;margin-top:4px">{subtitle}</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
 # ---------------------------
 # Helpers (data IO & scoring)
 # ---------------------------
@@ -132,14 +169,11 @@ def read_items(file) -> pd.DataFrame:
     return df
 
 def clean_items(df: pd.DataFrame) -> pd.DataFrame:
-    # Required
     for col in ["slot", "Name"]:
         if col not in df.columns:
             raise ValueError(f"Items file is missing required column: {col}")
-    # Ensure all stat columns present (fill with 0)
     for c in ALL_STATS:
         if c not in df.columns: df[c] = 0
-    # Numeric coercions
     for c in ALL_STATS + ["Cost_num"]:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
@@ -162,18 +196,15 @@ def read_constraints(file) -> dict:
     return {r["Constraint"]: float(r["Minimum"]) for _, r in cdf.iterrows()}
 
 def compute_score_row(row, weights_keys, w):
-    # Sum of stat * weight for only the stats provided in weights & present in items
     return float(sum(float(row[s]) * float(w[s]) for s in weights_keys))
 
 def make_scored_tables(items_df, weights):
-    # Only use stats that exist in items
     obj_stats = [k for k in weights.keys() if k in items_df.columns]
     is_ring = items_df["slot"].str.lower().str.contains("ring")
     ring_df = items_df[is_ring].copy()
     nonring_df = items_df[~is_ring].copy()
 
     nonring_df["Score"] = nonring_df.apply(lambda r: compute_score_row(r, obj_stats, weights), axis=1)
-    # Unique rings by name
     ring_groups = ring_df.groupby("Name", as_index=False).first()
     ring_groups["slot"] = "Ring"
     ring_groups["Score"] = ring_groups.apply(lambda r: compute_score_row(r, obj_stats, weights), axis=1)
@@ -189,20 +220,17 @@ def df_to_csv_bytes(df):
 # OR-Tools models (optimal & budget)
 # ---------------------------
 def solve_optimal(nonring_df, ring_groups, obj_stats, constraints_map):
-    """Maximize total score; return chosen DataFrame and totals."""
     slots = sorted(nonring_df["slot"].unique().tolist())
     model = cp_model.CpModel()
 
-    # Variables
-    x_vars = {}  # (slot, idx) -> BoolVar
+    x_vars = {}
     for slot in slots:
         for idx, row in nonring_df[nonring_df["slot"] == slot].iterrows():
             x_vars[(slot, idx)] = model.NewBoolVar(f"x_{slot}_{idx}")
-    y_vars = {}  # ring index -> BoolVar
+    y_vars = {}
     for j, row in ring_groups.iterrows():
         y_vars[j] = model.NewBoolVar(f"y_ring_{j}")
 
-    # Build coefficients (scaled integer score)
     def score_scaled_row(row):
         return int(round(compute_score_row(row, obj_stats, weights) * SCORE_SCALE))
 
@@ -213,13 +241,10 @@ def solve_optimal(nonring_df, ring_groups, obj_stats, constraints_map):
         score_terms.append(score_scaled_row(ring_groups.loc[j]) * var)
     model.Maximize(sum(score_terms))
 
-    # Exactly one item per non-ring slot
     for slot in slots:
         model.Add(sum(x_vars[(s,i)] for (s,i) in x_vars if s == slot) == 1)
-    # Exactly two rings
     model.Add(sum(y_vars.values()) == 2)
 
-    # Global minimum constraints
     for stat, minimum in constraints_map.items():
         stat_terms = []
         for (slot, idx), var in x_vars.items():
@@ -228,14 +253,12 @@ def solve_optimal(nonring_df, ring_groups, obj_stats, constraints_map):
             stat_terms.append(int(ring_groups.loc[j, stat]) * var)
         model.Add(sum(stat_terms) >= int(minimum))
 
-    # Solve
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = 20
     status = solver.Solve(model)
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         return None, None, status
 
-    # Collect chosen
     picked = []
     for (slot, idx), var in x_vars.items():
         if solver.Value(var):
@@ -245,12 +268,11 @@ def solve_optimal(nonring_df, ring_groups, obj_stats, constraints_map):
             r = ring_groups.loc[j].copy()
             picked.append(r)
     chosen_df = pd.DataFrame(picked)
-    # Order
+
     order = _slot_order(slots)
     chosen_df["__k"] = chosen_df["slot"].apply(lambda s: (order.index(s) if s in order else 999, s))
     chosen_df = chosen_df.sort_values("__k").drop(columns="__k")
 
-    # Totals
     totals = {c: (chosen_df[c].sum() if c in chosen_df.columns else 0) for c in ALL_STATS}
     total_score = sum(totals.get(s,0) * weights.get(s,0) for s in obj_stats)
     total_price = float(chosen_df["Cost_num"].sum()) if "Cost_num" in chosen_df.columns else 0.0
@@ -258,13 +280,11 @@ def solve_optimal(nonring_df, ring_groups, obj_stats, constraints_map):
     return chosen_df, {"totals": totals, "score": total_score, "price": total_price}, status
 
 def solve_budget(nonring_df, ring_groups, obj_stats, constraints_map, score_target, cost_epsilon=0):
-    """Lexicographic: (1) Minimize cost s.t. score>=target, constraints; (2) at min cost, maximize score."""
     slots = sorted(nonring_df["slot"].unique().tolist())
 
     def score_scaled_row(row):
         return int(round(compute_score_row(row, obj_stats, weights) * SCORE_SCALE))
 
-    # ---- Stage 1: minimize cost ----
     m1 = cp_model.CpModel()
     bx = {}
     for slot in slots:
@@ -272,7 +292,6 @@ def solve_budget(nonring_df, ring_groups, obj_stats, constraints_map, score_targ
             bx[(slot, idx)] = m1.NewBoolVar(f"bx_{slot}_{idx}")
     by = {j: m1.NewBoolVar(f"by_{j}") for j, _ in ring_groups.iterrows()}
 
-    # Cost and score expressions (integers)
     cost_terms = []
     for (slot, idx), var in bx.items():
         cost = int(nonring_df.loc[idx, "Cost_num"]) if "Cost_num" in nonring_df.columns else 0
@@ -287,11 +306,10 @@ def solve_budget(nonring_df, ring_groups, obj_stats, constraints_map, score_targ
     for j, var in by.items():
         score_terms.append(score_scaled_row(ring_groups.loc[j]) * var)
 
-    # Constraints
     for slot in slots:
         m1.Add(sum(bx[(s,i)] for (s,i) in bx if s == slot) == 1)
     m1.Add(sum(by.values()) == 2)
-    # global mins
+
     for stat, minimum in constraints_map.items():
         stat_terms = []
         for (slot, idx), var in bx.items():
@@ -299,10 +317,8 @@ def solve_budget(nonring_df, ring_groups, obj_stats, constraints_map, score_targ
         for j, var in by.items():
             stat_terms.append(int(ring_groups.loc[j, stat]) * var)
         m1.Add(sum(stat_terms) >= int(minimum))
-    # score threshold
-    m1.Add(sum(score_terms) >= int(round(score_target * SCORE_SCALE)))
 
-    # Minimize cost
+    m1.Add(sum(score_terms) >= int(round(score_target * SCORE_SCALE)))
     m1.Minimize(sum(cost_terms))
     s1 = cp_model.CpSolver()
     s1.parameters.max_time_in_seconds = 20
@@ -312,7 +328,6 @@ def solve_budget(nonring_df, ring_groups, obj_stats, constraints_map, score_targ
 
     min_cost = int(s1.ObjectiveValue())
 
-    # ---- Stage 2: maximize score with cost cap ----
     m2 = cp_model.CpModel()
     cx = {}
     for slot in slots:
@@ -334,6 +349,7 @@ def solve_budget(nonring_df, ring_groups, obj_stats, constraints_map, score_targ
     for slot in slots:
         m2.Add(sum(cx[(s,i)] for (s,i) in cx if s == slot) == 1)
     m2.Add(sum(cy.values()) == 2)
+
     for stat, minimum in constraints_map.items():
         stat_terms = []
         for (slot, idx), var in cx.items():
@@ -344,7 +360,6 @@ def solve_budget(nonring_df, ring_groups, obj_stats, constraints_map, score_targ
 
     m2.Add(sum(score_terms2) >= int(round(score_target * SCORE_SCALE)))
     m2.Add(sum(cost_terms2) <= min_cost + cost_epsilon)
-
     m2.Maximize(sum(score_terms2))
     s2 = cp_model.CpSolver()
     s2.parameters.max_time_in_seconds = 20
@@ -352,7 +367,6 @@ def solve_budget(nonring_df, ring_groups, obj_stats, constraints_map, score_targ
     if st2 not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         return None, None, st2
 
-    # Collect chosen
     picked = []
     for (slot, idx), var in cx.items():
         if s2.Value(var):
@@ -362,6 +376,7 @@ def solve_budget(nonring_df, ring_groups, obj_stats, constraints_map, score_targ
             r = ring_groups.loc[j].copy()
             picked.append(r)
     chosen_df = pd.DataFrame(picked)
+
     order = _slot_order(slots)
     chosen_df["__k"] = chosen_df["slot"].apply(lambda s: (order.index(s) if s in order else 999, s))
     chosen_df = chosen_df.sort_values("__k").drop(columns="__k")
@@ -376,22 +391,47 @@ def solve_budget(nonring_df, ring_groups, obj_stats, constraints_map, score_targ
 # UI
 # ---------------------------
 st.title("🗡️ Dilan's WoW Item Optimizer")
+
 with st.sidebar:
     st.markdown("### ⚙️ Upload & Settings")
     f_items = st.file_uploader("Items (CSV or JSON)", type=["csv","json"])
     f_weights = st.file_uploader("Stat weights (CSV)", type=["csv"])
     f_constraints = st.file_uploader("Constraints (CSV)", type=["csv"])
+
+    st.markdown("### 🎨 Theme")
     class_choice = st.selectbox("Theme color (WoW class)", list(WOW_CLASS_COLORS.keys()), index=3)
+
+    st.markdown("### 🖼 Header image")
+    show_hero = st.checkbox("Show header image", value=True)
+    hero_mode = st.radio("Source", ["URL", "Upload"], horizontal=True)
+    hero_url = st.text_input("Image URL (e.g., your Onyxia art)", value="") if hero_mode == "URL" else ""
+    hero_file = st.file_uploader("Upload header image", type=["png","jpg","jpeg","webp"]) if hero_mode == "Upload" else None
+    hero_height = st.slider("Header height (px)", 200, 500, 300, 10)
+
     max_loss = st.slider("Budget: allowed score loss (%)", 0.0, 20.0, DEFAULT_MAX_LOSS_PCT*100, 0.5) / 100.0
     run = st.button("Run optimization")
 
 # Apply theme after user selection
 inject_wow_theme(WOW_CLASS_COLORS[class_choice])
 
-if not run:
+# Top hero/banner
+if show_hero:
+    wow_hero(
+        image_bytes=(hero_file.getvalue() if (hero_mode == "Upload" and hero_file is not None) else None),
+        image_url=(hero_url if (hero_mode == "URL" and hero_url) else None),
+        height=hero_height,
+        title="Dilan's WoW Item Optimizer",
+        subtitle="Onyxia-sized upgrades without an Onyxia-sized bill."
+    )
+else:
     wow_banner("WoWtimizer", "Upload the three CSV files and click Run optimization.")
+
+if not run:
     st.stop()
 
+# ---------------------------
+# Run pipeline
+# ---------------------------
 try:
     items_df = clean_items(read_items(f_items))
     weights = read_weights(f_weights)
@@ -400,7 +440,6 @@ except Exception as e:
     st.error(str(e))
     st.stop()
 
-# Score tables
 nonring_df, ring_groups, obj_stats = make_scored_tables(items_df, weights)
 
 st.subheader("All items by slot (with weighted score) sorted by score")
@@ -455,7 +494,6 @@ st.dataframe(
 st.write(f"**Total price:** {meta['price']:.0f}g")
 st.write(f"**Total weighted score:** {meta['score']:.2f}")
 
-# Download buttons
 st.download_button("Download best set CSV", data=df_to_csv_bytes(chosen_df[best_cols]), file_name="best_item_set.csv")
 
 # Budget solve
@@ -488,8 +526,6 @@ score_drop_pct = 100.0 * max(meta["score"] - budget_meta["score"], 0) / meta["sc
 cost_saved_pct = 100.0 * max(gold_saved, 0) / meta["price"] if meta["price"] > 0 else 0.0
 
 st.subheader("↔️ Comparison")
-
-# Nice KPI widgets
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Optimal price", f"{meta['price']:.0f}g")
 c2.metric("Budget price", f"{budget_meta['price']:.0f}g", f"-{cost_saved_pct:.2f}%")
