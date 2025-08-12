@@ -71,7 +71,7 @@ def inject_templates_css():
 st.set_page_config(page_title="Dilan's WoWtimizer", layout="wide")
 
 SCORE_SCALE = 10  # convert weighted score to integers for CP-SAT
-DEFAULT_MAX_LOSS_PCT = 0.03
+DEFAULT_MAX_LOSS_PCT = 0.02
 ONYXIA_URL = "https://static.wikia.nocookie.net/wowpedia/images/7/71/Lady_Onyxia.jpg"
 
 ALL_STATS = [
@@ -430,13 +430,13 @@ with st.sidebar:
     f_weights = st.file_uploader("Stat weights (CSV)", type=["csv"])
     f_constraints = st.file_uploader("Constraints (CSV)", type=["csv"])
 
-    st.markdown("#### 🎨 Theme")
+    st.markdown("#### Theme")
     class_choice = st.selectbox(
-        "Theme color (WoW class)", list(WOW_CLASS_COLORS.keys()), index=3
+        "What class do you play?", list(WOW_CLASS_COLORS.keys()), index=3
     )
 
     max_loss = st.slider(
-        "Budget: allowed score loss (%)", 0.0, 20.0, DEFAULT_MAX_LOSS_PCT * 100, 0.5
+        "How much don't you want to improve? (%)", 0.0, 20.0, DEFAULT_MAX_LOSS_PCT * 100, 0.5
     ) / 100.0
 
     run = st.button("Run optimization")
@@ -456,9 +456,8 @@ if not run:
     # Pack into a single ZIP
     t_zip = pack_templates_zip(t_items, t_weights, t_constraints)
 
-    st.info("Upload the three CSVs in the sidebar, then click **Run optimization**.")
-    st.caption("Need examples? Download the templates ZIP. Rings should use slots like “Ring 1” / “Ring 2”. "
-               "Costs go in **Cost_num** (numbers only).")
+    st.info("Upload the three required CSV files on the left and click **Run optimization** at the bottom.")
+    st.caption("Need examples for CSV file format? Just download the template files and change the values to your own!")
 
     st.download_button(
         "⬇️ Download all templates (ZIP)",
@@ -585,6 +584,7 @@ st.write(
 )
 
 st.download_button("Download budget set CSV", data=df_to_csv_bytes(budget_df[bcols]), file_name="budget_item_set.csv")
+
 
 
 
