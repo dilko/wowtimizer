@@ -8,7 +8,7 @@ from ortools.sat.python import cp_model
 # ---------------------------
 # App & global settings
 # ---------------------------
-st.set_page_config(page_title="Dilan's WoW Item Optimizer", layout="wide")
+st.set_page_config(page_title="Dilan's WoWtimizer", layout="wide")
 
 SCORE_SCALE = 10  # convert weighted score to integers for CP-SAT
 DEFAULT_MAX_LOSS_PCT = 0.03
@@ -113,7 +113,7 @@ def inject_wow_theme(primary="#C79C6E"):
     </style>
     """, unsafe_allow_html=True)
 
-def wow_hero(title="Dilan's WoW Item Optimizer", subtitle="Onyxia-sized upgrades without an Onyxia-sized bill."):
+def wow_hero(title="Get yourself dragon-ready.", subtitle="You deserve that epic head."):
     st.markdown(
         f"""
         <div class="wow-hero">
@@ -362,7 +362,7 @@ def solve_budget(nonring_df, ring_groups, obj_stats, constraints_map, score_targ
 # ---------------------------
 # UI
 # ---------------------------
-st.title("🗡️ Dilan's WoW Item Optimizer")
+st.title("🗡️ Dilan's WoWtimizer")
 
 with st.sidebar:
     st.markdown("### ⚙️ Upload & Settings")
@@ -370,7 +370,7 @@ with st.sidebar:
     f_weights = st.file_uploader("Stat weights (CSV)", type=["csv"])
     f_constraints = st.file_uploader("Constraints (CSV)", type=["csv"])
 
-    st.markdown("### 🎨 Theme")
+    st.markdown("#### Theme")
     class_choice = st.selectbox("Theme color (WoW class)", list(WOW_CLASS_COLORS.keys()), index=3)
 
     max_loss = st.slider("Budget: allowed score loss (%)", 0.0, 20.0, DEFAULT_MAX_LOSS_PCT*100, 0.5) / 100.0
@@ -493,3 +493,4 @@ st.write(
 )
 
 st.download_button("Download budget set CSV", data=df_to_csv_bytes(budget_df[bcols]), file_name="budget_item_set.csv")
+
