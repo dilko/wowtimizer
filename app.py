@@ -381,7 +381,7 @@ inject_wow_theme(WOW_CLASS_COLORS[class_choice])
 wow_hero()
 
 if not run:
-    st.info("Upload the three CSV files and click **Run optimization**.")
+    st.info("Upload the three required CSV files on the left and click **Run optimization** at the bottom.")
     st.stop()
 
 # ---------------------------
@@ -398,7 +398,7 @@ except Exception as e:
 nonring_df, ring_groups, obj_stats = make_scored_tables(items_df, weights)
 
 st.subheader("All items by slot")
-st.caption("Sorted by item score calculated based on stat weights you provided")
+st.markdown("###### Sorted by item score calculated based on stat weights you provided")
 for slot in sorted(nonring_df["slot"].unique().tolist()):
     with st.expander(f"{slot}", expanded=False):
         df = nonring_df[nonring_df["slot"] == slot].copy()
@@ -497,6 +497,7 @@ st.write(
 )
 
 st.download_button("Download budget set CSV", data=df_to_csv_bytes(budget_df[bcols]), file_name="budget_item_set.csv")
+
 
 
 
