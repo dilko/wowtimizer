@@ -434,7 +434,8 @@ with st.sidebar:
     class_choice = st.selectbox(
         "What class do you play?", list(WOW_CLASS_COLORS.keys()), index=3
     )
-
+    
+    st.markdown("#### Budget set option")
     max_loss = st.slider(
         "How much don't you want to improve? (%)", 0.0, 20.0, DEFAULT_MAX_LOSS_PCT * 100, 0.5
     ) / 100.0
@@ -584,6 +585,7 @@ st.write(
 )
 
 st.download_button("Download budget set CSV", data=df_to_csv_bytes(budget_df[bcols]), file_name="budget_item_set.csv")
+
 
 
 
