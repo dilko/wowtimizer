@@ -4,6 +4,57 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 from ortools.sat.python import cp_model
+from pathlib import Path
+
+# ---------- Template helpers ----------
+def _csv_bytes(df: pd.DataFrame) -> bytes:
+    return df.to_csv(index=False).encode("utf-8")
+
+def _items_template_default() -> pd.DataFrame:
+    cols = ["slot", "Name"] + ALL_STATS + ["Cost_num"]
+    # Two example rows: one non-ring, one ring
+    rows = [
+        {**{c: 0 for c in ALL_STATS}, **{"slot": "Head", "Name": "Example Helm", "Cost_num": 500}},
+        {**{c: 0 for c in ALL_STATS}, **{"slot": "Ring 1", "Name": "Example Ring", "Cost_num": 350}},
+    ]
+    # Make sure types are friendly: strings for slot/Name, numerics for stats/cost
+    df = pd.DataFrame(rows, columns=cols)
+    df["slot"] = df["slot"].astype(str)
+    df["Name"] = df["Name"].astype(str)
+    for c in ALL_STATS + ["Cost_num"]:
+        df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0).astype(int)
+    return df
+
+def _weights_template_default() -> pd.DataFrame:
+    # Provide the standard attributes with blank or starter values
+    vals = {
+        "Attack Power": 1.0,
+        "Strength": 1.2,
+        "Agility": 1.7,
+        "Intellect": 0.5,
+        "Spell Power": 0.8,
+        "Critical Strike Rating": 1.3,
+        "Haste Rating": 2.0,
+        "Armor Penetration": 1.1,
+        "Stamina": 0.0,           # usually 0 unless you want it in score
+        "Hit Rating": 0.0,        # usually constrained, not scored
+        "Expertise Rating": 0.0,  # usually constrained, not scored
+    }
+    return pd.DataFrame({"Attribute": list(vals.keys()), "Value": list(vals.values())})
+
+def _constraints_template_default() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "Constraint": ["Stamina", "Hit Rating", "Expertise Rating"],
+            "Minimum": [1000, 300, 100],
+        }
+    )
+
+def load_template_or_default(path: str, fallback_df_fn) -> bytes:
+    p = Path(path)
+    if p.exists():
+        return p.read_bytes()
+    return _csv_bytes(fallback_df_fn())
 
 # ---------------------------
 # App & global settings
@@ -373,8 +424,23 @@ with st.sidebar:
     st.markdown("#### Theme")
     class_choice = st.selectbox("Theme color (WoW class)", list(WOW_CLASS_COLORS.keys()), index=3)
 
+    st.markdown("#### Download CSV templates")
+    # If you commit your uploaded samples to the repo under /templates/, these will serve those exact files.
+    # Otherwise we generate safe defaults with correct headers.
+    t_items = load_template_or_default("templates/items_list.csv", _items_template_default)
+    t_weights = load_template_or_default("templates/stat_weights.csv", _weights_template_default)
+    t_constraints = load_template_or_default("templates/constraints.csv", _constraints_template_default)
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.download_button("Items template", data=t_items, file_name="items_template.csv", mime="text/csv")
+        st.download_button("Constraints template", data=t_constraints, file_name="constraints_template.csv", mime="text/csv")
+    with c2:
+        st.download_button("Stat weights template", data=t_weights, file_name="stat_weights_template.csv", mime="text/csv")
+
     max_loss = st.slider("Budget: allowed score loss (%)", 0.0, 20.0, DEFAULT_MAX_LOSS_PCT*100, 0.5) / 100.0
     run = st.button("Run optimization")
+
 
 # Apply theme and fixed hero
 inject_wow_theme(WOW_CLASS_COLORS[class_choice])
@@ -497,6 +563,7 @@ st.write(
 )
 
 st.download_button("Download budget set CSV", data=df_to_csv_bytes(budget_df[bcols]), file_name="budget_item_set.csv")
+
 
 
 
