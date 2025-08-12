@@ -397,7 +397,8 @@ except Exception as e:
 
 nonring_df, ring_groups, obj_stats = make_scored_tables(items_df, weights)
 
-st.subheader("All items by slot (with weighted score) sorted by score")
+st.subheader("All items by slot")
+st.caption("Sorted by item score calculated based on stat weights you provided")
 for slot in sorted(nonring_df["slot"].unique().tolist()):
     with st.expander(f"{slot}", expanded=False):
         df = nonring_df[nonring_df["slot"] == slot].copy()
@@ -437,7 +438,8 @@ best_cols = ["slot","Name"] + [c for c in ALL_STATS if c in chosen_df.columns]
 if "Cost_num" in chosen_df.columns: best_cols += ["Cost_num"]
 if "Score" in chosen_df.columns:   best_cols += ["Score"]
 
-st.subheader("🇧🇮🇸 List — For true min-maxers with deep pockets.")
+st.subheader("🇧🇮🇸 List")
+st.caption("For true min-maxers with deep pockets")
 st.dataframe(
     chosen_df[best_cols],
     use_container_width=True,
@@ -463,7 +465,8 @@ bcols = ["slot","Name"] + [c for c in ALL_STATS if c in budget_df.columns]
 if "Cost_num" in budget_df.columns: bcols += ["Cost_num"]
 if "Score" in budget_df.columns:    bcols += ["Score"]
 
-st.subheader(f"💸 Budget set (≤ {max_loss*100:.1f}% score loss, cheapest then best score) — For petty penny-pinchers.")
+st.subheader(f"💸 Budget set (≤ {max_loss*100:.1f}% score loss)")
+st.caption("For petty penny-pinchers")
 st.dataframe(
     budget_df[bcols],
     use_container_width=True,
@@ -493,4 +496,5 @@ st.write(
 )
 
 st.download_button("Download budget set CSV", data=df_to_csv_bytes(budget_df[bcols]), file_name="budget_item_set.csv")
+
 
