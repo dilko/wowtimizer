@@ -426,7 +426,7 @@ st.title("🗡️ Dilan's WoWtimizer")
 
 with st.sidebar:
     st.markdown("### ⚙️ Upload & Settings")
-    f_items = st.file_uploader("Items (CSV or JSON)", type=["csv","json"])
+    f_items = st.file_uploader("Items (CSV)", type=["csv"])
     f_weights = st.file_uploader("Stat weights (CSV)", type=["csv"])
     f_constraints = st.file_uploader("Constraints (CSV)", type=["csv"])
 
@@ -585,6 +585,7 @@ st.write(
 )
 
 st.download_button("Download budget set CSV", data=df_to_csv_bytes(budget_df[bcols]), file_name="budget_item_set.csv")
+
 
 
 
