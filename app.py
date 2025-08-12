@@ -1,6 +1,5 @@
 import io
 import json
-import base64
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -13,6 +12,7 @@ st.set_page_config(page_title="Dilan's WoW Item Optimizer", layout="wide")
 
 SCORE_SCALE = 10  # convert weighted score to integers for CP-SAT
 DEFAULT_MAX_LOSS_PCT = 0.03
+ONYXIA_URL = "https://static.wikia.nocookie.net/wowpedia/images/7/71/Lady_Onyxia.jpg"
 
 ALL_STATS = [
     "Attack Power","Strength","Agility","Intellect","Spell Power",
@@ -64,6 +64,21 @@ def inject_wow_theme(primary="#C79C6E"):
         letter-spacing: .3px;
       }}
 
+      /* Hero banner */
+      .wow-hero {{
+        border:1px solid var(--wow-gold);
+        border-radius:14px;
+        height:300px;
+        padding:16px 18px;
+        margin:8px 0 18px 0;
+        display:flex;
+        align-items:flex-end;
+        background-image: linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,.55)), url('{ONYXIA_URL}');
+        background-size: cover;
+        background-position: center;
+      }}
+
+      /* Panels & tables */
       div[data-testid="stExpander"] > details {{
         border: 1px solid var(--wow-gold);
         border-radius: 12px;
@@ -79,6 +94,7 @@ def inject_wow_theme(primary="#C79C6E"):
         padding: 4px;
       }}
 
+      /* Buttons & downloads */
       .stButton>button, .stDownloadButton>button {{
         background: linear-gradient(180deg, var(--wow-primary), #3b2f1f);
         color: #fff;
@@ -87,6 +103,7 @@ def inject_wow_theme(primary="#C79C6E"):
         box-shadow: 0 0 0 1px rgba(0,0,0,.5) inset, 0 1px 4px rgba(0,0,0,.4);
       }}
 
+      /* KPI metrics */
       div[data-testid="stMetric"] {{
         background: var(--wow-panel);
         border: 1px solid var(--wow-gold);
@@ -96,55 +113,10 @@ def inject_wow_theme(primary="#C79C6E"):
     </style>
     """, unsafe_allow_html=True)
 
-def wow_banner(title="WoWtimizer", subtitle="Min-max your loot. Save your gold."):
+def wow_hero(title="Dilan's WoW Item Optimizer", subtitle="Onyxia-sized upgrades without an Onyxia-sized bill."):
     st.markdown(
         f"""
-        <div style="
-          border:1px solid var(--wow-gold);
-          border-radius:14px;
-          padding:16px 18px;
-          margin:8px 0 18px 0;
-          background: linear-gradient(180deg, rgba(255,215,128,0.08), rgba(0,0,0,0));
-        ">
-          <div style="font-family:'Cinzel',serif;font-size:32px;color:var(--wow-primary);line-height:1.1;">
-            {title}
-          </div>
-          <div style="color:var(--wow-ink);opacity:.9;margin-top:4px">{subtitle}</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-def wow_hero(image_bytes: bytes = None, image_url: str = None, height: int = 280,
-             title="Dilan's WoW Item Optimizer", subtitle="Pick smarter. Spend wiser."):
-    """
-    Renders a hero banner with an optional background image (upload or URL).
-    If both provided, the uploaded image takes precedence.
-    """
-    url = None
-    if image_bytes:
-        b64 = base64.b64encode(image_bytes).decode()
-        url = f"data:image/png;base64,{b64}"
-    elif image_url:
-        url = image_url
-
-    if url:
-        bg = f"background-image: linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,.55)), url('{url}'); background-size: cover; background-position: center;"
-    else:
-        bg = "background: linear-gradient(180deg, rgba(255,215,128,0.08), rgba(0,0,0,0));"
-
-    st.markdown(
-        f"""
-        <div style="
-          border:1px solid var(--wow-gold);
-          border-radius:14px;
-          height:{height}px;
-          padding:16px 18px;
-          margin:8px 0 18px 0;
-          display:flex;
-          align-items:flex-end;
-          {bg}
-        ">
+        <div class="wow-hero">
           <div>
             <div style="font-family:'Cinzel',serif;font-size:34px;color:var(--wow-primary);line-height:1.1;">
               {title}
@@ -401,32 +373,15 @@ with st.sidebar:
     st.markdown("### 🎨 Theme")
     class_choice = st.selectbox("Theme color (WoW class)", list(WOW_CLASS_COLORS.keys()), index=3)
 
-    st.markdown("### 🖼 Header image")
-    show_hero = st.checkbox("Show header image", value=True)
-    hero_mode = st.radio("Source", ["URL", "Upload"], horizontal=True)
-    hero_url = st.text_input("Image URL (e.g., your Onyxia art)", value="") if hero_mode == "URL" else ""
-    hero_file = st.file_uploader("Upload header image", type=["png","jpg","jpeg","webp"]) if hero_mode == "Upload" else None
-    hero_height = st.slider("Header height (px)", 200, 500, 300, 10)
-
     max_loss = st.slider("Budget: allowed score loss (%)", 0.0, 20.0, DEFAULT_MAX_LOSS_PCT*100, 0.5) / 100.0
     run = st.button("Run optimization")
 
-# Apply theme after user selection
+# Apply theme and fixed hero
 inject_wow_theme(WOW_CLASS_COLORS[class_choice])
-
-# Top hero/banner
-if show_hero:
-    wow_hero(
-        image_bytes=(hero_file.getvalue() if (hero_mode == "Upload" and hero_file is not None) else None),
-        image_url=(hero_url if (hero_mode == "URL" and hero_url) else None),
-        height=hero_height,
-        title="Dilan's WoW Item Optimizer",
-        subtitle="Onyxia-sized upgrades without an Onyxia-sized bill."
-    )
-else:
-    wow_banner("WoWtimizer", "Upload the three CSV files and click Run optimization.")
+wow_hero()
 
 if not run:
+    st.info("Upload the three CSV files and click **Run optimization**.")
     st.stop()
 
 # ---------------------------
