@@ -5,7 +5,10 @@ import pandas as pd
 import streamlit as st
 from ortools.sat.python import cp_model
 
-st.set_page_config(page_title="Item Optimizer", layout="wide")
+# ---------------------------
+# App & global settings
+# ---------------------------
+st.set_page_config(page_title="Dilan's WoW Item Optimizer", layout="wide")
 
 SCORE_SCALE = 10  # convert weighted score to integers for CP-SAT
 DEFAULT_MAX_LOSS_PCT = 0.03
@@ -16,7 +19,109 @@ ALL_STATS = [
     "Stamina","Hit Rating","Expertise Rating"
 ]
 
-# ---------- Helpers ----------
+# ---------------------------
+# WoW theme helpers
+# ---------------------------
+WOW_CLASS_COLORS = {
+    "Warrior": "#C79C6E",
+    "Paladin": "#F58CBA",
+    "Hunter":  "#ABD473",
+    "Rogue":   "#FFF569",
+    "Priest":  "#FFFFFF",
+    "Death Knight": "#C41F3B",
+    "Shaman":  "#0070DE",
+    "Mage":    "#40C7EB",
+    "Warlock": "#8787ED",
+    "Monk":    "#00FF96",
+    "Druid":   "#FF7D0A",
+    "Demon Hunter": "#A330C9",
+}
+
+def inject_wow_theme(primary="#C79C6E"):
+    st.markdown(f"""
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Inter:wght@400;600&display=swap');
+
+      :root {{
+        --wow-primary: {primary};
+        --wow-gold: #b08d57;
+        --wow-ink: #f4e6c1;
+        --wow-panel: rgba(20,16,12,0.65);
+        --wow-panel-strong: rgba(20,16,12,0.85);
+      }}
+
+      /* App background + base text */
+      .stApp {{
+        background: radial-gradient(1200px 600px at 20% -10%, #242018 0%, #0e0b08 55%, #080705 100%);
+        color: var(--wow-ink);
+        font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      }}
+
+      /* Headings */
+      h1, h2, h3 {{
+        font-family: 'Cinzel', serif !important;
+        color: var(--wow-primary) !important;
+        text-shadow: 0 0 6px rgba(0,0,0,.6);
+        letter-spacing: .3px;
+      }}
+
+      /* Parchment-ish panels (expanders, dataframes) */
+      div[data-testid="stExpander"] > details {{
+        border: 1px solid var(--wow-gold);
+        border-radius: 12px;
+        background: var(--wow-panel);
+      }}
+      div[data-testid="stExpander"] summary {{
+        color: var(--wow-ink) !important;
+      }}
+      div[data-testid="stDataFrame"] > div {{
+        background: var(--wow-panel-strong);
+        border: 1px solid var(--wow-gold);
+        border-radius: 10px;
+        padding: 4px;
+      }}
+
+      /* Buttons & downloads */
+      .stButton>button, .stDownloadButton>button {{
+        background: linear-gradient(180deg, var(--wow-primary), #3b2f1f);
+        color: #fff;
+        border: 1px solid var(--wow-gold);
+        border-radius: 10px;
+        box-shadow: 0 0 0 1px rgba(0,0,0,.5) inset, 0 1px 4px rgba(0,0,0,.4);
+      }}
+
+      /* KPI metrics */
+      div[data-testid="stMetric"] {{
+        background: var(--wow-panel);
+        border: 1px solid var(--wow-gold);
+        border-radius: 10px;
+        padding: 10px;
+      }}
+    </style>
+    """, unsafe_allow_html=True)
+
+def wow_banner(title="WoWtimizer", subtitle="Min-max your loot. Save your gold."):
+    st.markdown(
+        f"""
+        <div style="
+          border:1px solid var(--wow-gold);
+          border-radius:14px;
+          padding:16px 18px;
+          margin:8px 0 18px 0;
+          background: linear-gradient(180deg, rgba(255,215,128,0.08), rgba(0,0,0,0));
+        ">
+          <div style="font-family:'Cinzel',serif;font-size:32px;color:var(--wow-primary);line-height:1.1;">
+            {title}
+          </div>
+          <div style="color:var(--wow-ink);opacity:.9;margin-top:4px">{subtitle}</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+# ---------------------------
+# Helpers (data IO & scoring)
+# ---------------------------
 def read_items(file) -> pd.DataFrame:
     name = file.name.lower()
     if name.endswith(".json"):
@@ -80,7 +185,9 @@ def _slot_order(slots):
 def df_to_csv_bytes(df):
     return df.to_csv(index=False).encode("utf-8")
 
-# ---------- OR-Tools models ----------
+# ---------------------------
+# OR-Tools models (optimal & budget)
+# ---------------------------
 def solve_optimal(nonring_df, ring_groups, obj_stats, constraints_map):
     """Maximize total score; return chosen DataFrame and totals."""
     slots = sorted(nonring_df["slot"].unique().tolist())
@@ -95,7 +202,7 @@ def solve_optimal(nonring_df, ring_groups, obj_stats, constraints_map):
     for j, row in ring_groups.iterrows():
         y_vars[j] = model.NewBoolVar(f"y_ring_{j}")
 
-    # Build coefficients (scaled integer score, integer cost)
+    # Build coefficients (scaled integer score)
     def score_scaled_row(row):
         return int(round(compute_score_row(row, obj_stats, weights) * SCORE_SCALE))
 
@@ -106,7 +213,7 @@ def solve_optimal(nonring_df, ring_groups, obj_stats, constraints_map):
         score_terms.append(score_scaled_row(ring_groups.loc[j]) * var)
     model.Maximize(sum(score_terms))
 
-    # Exactly one per non-ring slot
+    # Exactly one item per non-ring slot
     for slot in slots:
         model.Add(sum(x_vars[(s,i)] for (s,i) in x_vars if s == slot) == 1)
     # Exactly two rings
@@ -114,7 +221,6 @@ def solve_optimal(nonring_df, ring_groups, obj_stats, constraints_map):
 
     # Global minimum constraints
     for stat, minimum in constraints_map.items():
-        # Sum over chosen items
         stat_terms = []
         for (slot, idx), var in x_vars.items():
             stat_terms.append(int(nonring_df.loc[idx, stat]) * var)
@@ -266,19 +372,24 @@ def solve_budget(nonring_df, ring_groups, obj_stats, constraints_map, score_targ
 
     return chosen_df, {"totals": totals, "score": score, "price": price}, st2
 
-# ---------- UI ----------
-st.title("📦 Item Optimizer (with Budget Alternative)")
-
+# ---------------------------
+# UI
+# ---------------------------
+st.title("🗡️ Dilan's WoW Item Optimizer")
 with st.sidebar:
-    st.markdown("### Upload files")
+    st.markdown("### ⚙️ Upload & Settings")
     f_items = st.file_uploader("Items (CSV or JSON)", type=["csv","json"])
     f_weights = st.file_uploader("Stat weights (CSV)", type=["csv"])
     f_constraints = st.file_uploader("Constraints (CSV)", type=["csv"])
+    class_choice = st.selectbox("Theme color (WoW class)", list(WOW_CLASS_COLORS.keys()), index=3)
     max_loss = st.slider("Budget: allowed score loss (%)", 0.0, 20.0, DEFAULT_MAX_LOSS_PCT*100, 0.5) / 100.0
     run = st.button("Run optimization")
 
+# Apply theme after user selection
+inject_wow_theme(WOW_CLASS_COLORS[class_choice])
+
 if not run:
-    st.info("Upload the three files and click **Run optimization**.")
+    wow_banner("WoWtimizer", "Upload the three CSV files and click Run optimization.")
     st.stop()
 
 try:
@@ -292,21 +403,35 @@ except Exception as e:
 # Score tables
 nonring_df, ring_groups, obj_stats = make_scored_tables(items_df, weights)
 
-st.subheader("All items by slot (with weighted score)")
+st.subheader("All items by slot (with weighted score) sorted by score")
 for slot in sorted(nonring_df["slot"].unique().tolist()):
     with st.expander(f"{slot}", expanded=False):
         df = nonring_df[nonring_df["slot"] == slot].copy()
         show_cols = ["slot","Name"] + [c for c in ALL_STATS if c in df.columns]
         if "Cost_num" in df.columns: show_cols += ["Cost_num"]
         show_cols += ["Score"]
-        st.dataframe(df.sort_values("Score", ascending=False)[show_cols], use_container_width=True)
+        st.dataframe(
+            df.sort_values("Score", ascending=False)[show_cols],
+            use_container_width=True,
+            column_config={
+                "Cost_num": st.column_config.NumberColumn("Cost (g)", format="%d g"),
+                "Score": st.column_config.NumberColumn("Score", format="%.1f"),
+            }
+        )
 
 with st.expander("Rings (unique by Name)", expanded=False):
     rg = ring_groups.copy().sort_values("Score", ascending=False)
     ring_cols = ["slot","Name"] + [c for c in ALL_STATS if c in rg.columns]
     if "Cost_num" in rg.columns: ring_cols += ["Cost_num"]
     ring_cols += ["Score"]
-    st.dataframe(rg[ring_cols], use_container_width=True)
+    st.dataframe(
+        rg[ring_cols],
+        use_container_width=True,
+        column_config={
+            "Cost_num": st.column_config.NumberColumn("Cost (g)", format="%d g"),
+            "Score": st.column_config.NumberColumn("Score", format="%.1f"),
+        }
+    )
 
 # Optimal solve
 chosen_df, meta, status = solve_optimal(nonring_df, ring_groups, obj_stats, constraints_map)
@@ -318,8 +443,15 @@ best_cols = ["slot","Name"] + [c for c in ALL_STATS if c in chosen_df.columns]
 if "Cost_num" in chosen_df.columns: best_cols += ["Cost_num"]
 if "Score" in chosen_df.columns:   best_cols += ["Score"]
 
-st.subheader("✅ Best set (max score)")
-st.dataframe(chosen_df[best_cols], use_container_width=True)
+st.subheader("🇧🇮🇸 List — For true min-maxers with deep pockets.")
+st.dataframe(
+    chosen_df[best_cols],
+    use_container_width=True,
+    column_config={
+        "Cost_num": st.column_config.NumberColumn("Cost (g)", format="%d g"),
+        "Score": st.column_config.NumberColumn("Score", format="%.1f"),
+    }
+)
 st.write(f"**Total price:** {meta['price']:.0f}g")
 st.write(f"**Total weighted score:** {meta['score']:.2f}")
 
@@ -338,8 +470,15 @@ bcols = ["slot","Name"] + [c for c in ALL_STATS if c in budget_df.columns]
 if "Cost_num" in budget_df.columns: bcols += ["Cost_num"]
 if "Score" in budget_df.columns:    bcols += ["Score"]
 
-st.subheader(f"💸 Budget set (≤ {max_loss*100:.1f}% score loss, cheapest then best score)")
-st.dataframe(budget_df[bcols], use_container_width=True)
+st.subheader(f"💸 Budget set (≤ {max_loss*100:.1f}% score loss, cheapest then best score) — For petty penny-pinchers.")
+st.dataframe(
+    budget_df[bcols],
+    use_container_width=True,
+    column_config={
+        "Cost_num": st.column_config.NumberColumn("Cost (g)", format="%d g"),
+        "Score": st.column_config.NumberColumn("Score", format="%.1f"),
+    }
+)
 st.write(f"**Budget total price:** {budget_meta['price']:.0f}g")
 st.write(f"**Budget total weighted score:** {budget_meta['score']:.2f}")
 
@@ -363,4 +502,3 @@ st.write(
 )
 
 st.download_button("Download budget set CSV", data=df_to_csv_bytes(budget_df[bcols]), file_name="budget_item_set.csv")
-
