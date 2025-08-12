@@ -448,29 +448,28 @@ inject_wow_theme(WOW_CLASS_COLORS[class_choice])
 wow_hero()
 
 if not run:
-    # Templates shown on the RIGHT before running
-    inject_templates_css()
-
     # Load repo copies if present; else generate defaults
     t_items = load_template_or_default("templates/items_list.csv", _items_template_default)
     t_weights = load_template_or_default("templates/stat_weights.csv", _weights_template_default)
     t_constraints = load_template_or_default("templates/constraints.csv", _constraints_template_default)
+
+    # Pack into a single ZIP
     t_zip = pack_templates_zip(t_items, t_weights, t_constraints)
 
-    left, right = st.columns([2.2, 1])
-    with left:
-        st.info("Upload the three CSVs in the sidebar, then click **Run optimization**.")
-        st.caption("Need examples? Grab the templates on the right. Rings should use slots like “Ring 1” / “Ring 2”. Costs go in **Cost_num** (numbers only).")
-    with right:
-        st.markdown("### 📥 Download CSV templates")
-        st.markdown('<div id="tmpl-row">', unsafe_allow_html=True)
-        st.download_button("📜 Items", data=t_items, file_name="items_template.csv", mime="text/csv", key="tmpl_items")
-        st.download_button("📄 Weights", data=t_weights, file_name="stat_weights_template.csv", mime="text/csv", key="tmpl_weights")
-        st.download_button("🗂️ Constraints", data=t_constraints, file_name="constraints_template.csv", mime="text/csv", key="tmpl_constraints")
-        st.markdown('</div>', unsafe_allow_html=True)
-        st.download_button("⬇️ Download all (ZIP)", data=t_zip, file_name="templates.zip", mime="application/zip", key="tmpl_zip")
+    st.info("Upload the three CSVs in the sidebar, then click **Run optimization**.")
+    st.caption("Need examples? Download the templates ZIP. Rings should use slots like “Ring 1” / “Ring 2”. "
+               "Costs go in **Cost_num** (numbers only).")
+
+    st.download_button(
+        "⬇️ Download all templates (ZIP)",
+        data=t_zip,
+        file_name="wowtimizer_templates.zip",
+        mime="application/zip",
+        key="tmpl_zip",
+    )
 
     st.stop()
+
 
 
 # ---------------------------
@@ -586,6 +585,7 @@ st.write(
 )
 
 st.download_button("Download budget set CSV", data=df_to_csv_bytes(budget_df[bcols]), file_name="budget_item_set.csv")
+
 
 
 
