@@ -398,7 +398,7 @@ except Exception as e:
 nonring_df, ring_groups, obj_stats = make_scored_tables(items_df, weights)
 
 st.subheader("All items by slot")
-st.markdown("###### Sorted by item score calculated based on stat weights you provided")
+st.markdown("###### Sorted by item score that was calculated based on stat weights you provided.")
 for slot in sorted(nonring_df["slot"].unique().tolist()):
     with st.expander(f"{slot}", expanded=False):
         df = nonring_df[nonring_df["slot"] == slot].copy()
@@ -438,7 +438,7 @@ best_cols = ["slot","Name"] + [c for c in ALL_STATS if c in chosen_df.columns]
 if "Cost_num" in chosen_df.columns: best_cols += ["Cost_num"]
 if "Score" in chosen_df.columns:   best_cols += ["Score"]
 
-st.subheader("🏆🇧🇮🇸 List")
+st.subheader("🏆BiS List")
 st.markdown("###### For true min-maxers with deep pockets.")
 st.dataframe(
     chosen_df[best_cols],
@@ -465,8 +465,8 @@ bcols = ["slot","Name"] + [c for c in ALL_STATS if c in budget_df.columns]
 if "Cost_num" in budget_df.columns: bcols += ["Cost_num"]
 if "Score" in budget_df.columns:    bcols += ["Score"]
 
-st.subheader(f"💸 Budget set (≤ {max_loss*100:.1f}% score loss)")
-st.markdown("###### For petty penny-pinchers")
+st.subheader(f"💰 Budget set (≤ {max_loss*100:.1f}% score loss)")
+st.markdown("###### For petty penny-pinchers.")
 st.dataframe(
     budget_df[bcols],
     use_container_width=True,
@@ -484,10 +484,10 @@ score_drop_pct = 100.0 * max(meta["score"] - budget_meta["score"], 0) / meta["sc
 cost_saved_pct = 100.0 * max(gold_saved, 0) / meta["price"] if meta["price"] > 0 else 0.0
 
 st.subheader("↔️ Comparison")
-st.markdown("###### Know what you're trading off")
+st.markdown("###### Know what you're trading off.")
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Optimal price", f"{meta['price']:.0f}g")
-c2.metric("Budget price", f"{budget_meta['price']:.0f}g", f"-{cost_saved_pct:.2f}%")
+c2.metric("Budget price", f"{budget_meta['price']:.0f}g")
 c3.metric("Score drop", f"{score_drop_pct:.2f}%")
 c4.metric("Gold saved", f"{max(gold_saved,0):.0f}g")
 
@@ -497,6 +497,7 @@ st.write(
 )
 
 st.download_button("Download budget set CSV", data=df_to_csv_bytes(budget_df[bcols]), file_name="budget_item_set.csv")
+
 
 
 
