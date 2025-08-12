@@ -346,9 +346,21 @@ st.write(f"**Budget total weighted score:** {budget_meta['score']:.2f}")
 # Comparison
 gold_saved = meta["price"] - budget_meta["price"]
 score_drop_pct = 100.0 * max(meta["score"] - budget_meta["score"], 0) / meta["score"] if meta["score"] > 0 else 0.0
+cost_saved_pct = 100.0 * max(gold_saved, 0) / meta["price"] if meta["price"] > 0 else 0.0
+
 st.subheader("↔️ Comparison")
+
+# Nice KPI widgets
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("Optimal price", f"{meta['price']:.0f}g")
+c2.metric("Budget price", f"{budget_meta['price']:.0f}g", f"-{cost_saved_pct:.2f}%")
+c3.metric("Score drop", f"{score_drop_pct:.2f}%")
+c4.metric("Gold saved", f"{max(gold_saved,0):.0f}g")
+
 st.write(
-    f"For **{gold_saved:.0f}g less**, you can get this set that is only **{score_drop_pct:.2f}%** worse than the best option."
+    f"For **{max(gold_saved,0):.0f}g less (-{cost_saved_pct:.2f}%)**, "
+    f"you can get this set that is only **{score_drop_pct:.2f}%** worse than the best option."
 )
 
 st.download_button("Download budget set CSV", data=df_to_csv_bytes(budget_df[bcols]), file_name="budget_item_set.csv")
+
